@@ -1,0 +1,19 @@
+{
+  "name": "cacao-eudr-api",
+  "version": "1.0.0",
+  "description": "API Express — pont Laravel ↔ Hyperledger Fabric pour traçabilité EUDR",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@hyperledger/fabric-gateway": "^1.5.0",
+    "@grpc/grpc-js": "^1.10.0",
+    "express": "^4.18.0",
+    "axios": "^1.6.0"
+  }
+}

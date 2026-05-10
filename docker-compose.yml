@@ -1,0 +1,74 @@
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Microfab : nœud Hyperledger Fabric tout-en-un (peer + orderer + CA + gateway)
+# Image officielle IBM — zéro réseau externe, zéro TLS à configurer.
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  microfab:
+    image: ibmcom/ibp-microfab:latest
+    container_name: microfab
+    restart: unless-stopped
+
+    ports:
+      # Port principal : API de gestion Microfab (enroll, deploy chaincode, etc.)
+      - "8080:8080"
+
+    environment:
+      # Configuration minimaliste d'un seul canal "cacao-channel"
+      # avec une seule organisation "CacaoOrg"
+      MICROFAB_CONFIG: >
+        {
+          "endorsing_organizations": [
+            {
+              "name": "CacaoOrg"
+            }
+          ],
+          "channels": [
+            {
+              "name": "cacao-channel",
+              "endorsing_organizations": ["CacaoOrg"]
+            }
+          ],
+          "capability_level": "V2_0"
+        }
+
+    volumes:
+      # Persistance des données du ledger entre redémarrages
+      - microfab_data:/var/hyperledger/production
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/ak/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # API Node.js : pont entre Laravel (off-chain) et Fabric (on-chain)
+  # Démarre uniquement après que Microfab est healthy.
+  # ───────────────────────────────────────────────────────────────────────────
+  cacao-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: cacao-api
+    restart: unless-stopped
+    depends_on:
+      microfab:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      MICROFAB_URL: "http://microfab:8080"
+      CHANNEL_NAME: "cacao-channel"
+      CHAINCODE_NAME: "cacao-contract"
+      MSP_ID: "CacaoOrgMSP"
+      PORT: "3000"
+      # Clé API partagée avec Laravel — changer cette valeur en production
+      BLOCKCHAIN_API_KEY: "changeme-eudr-api-key-2024"
+    volumes:
+      # Montage du dossier chaincode pour le déploiement automatique au boot
+      - ./chaincode:/app/chaincode:ro
+
+volumes:
+  microfab_data:
