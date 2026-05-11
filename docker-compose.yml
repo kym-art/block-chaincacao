@@ -9,6 +9,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      - "2002:2002"
+      - "2004:2004"
+      - "2001:2001"
     volumes:
       - ./microfab-data:/opt/microfab/data
       - ./chaincode:/opt/microfab/chaincode
@@ -45,3 +48,38 @@ services:
       - BLOCKCHAIN_API_KEY=mariuskym
     volumes:
       - ./chaincode:/app/chaincode:ro
+
+
+  # explorerdb:
+  #   image: hyperledger/explorer-db:latest
+  #   container_name: explorerdb
+  #   environment:
+  #     - MYSQL_DATABASE=fabricexplorer
+  #     - MYSQL_USER=hppoc
+  #     - MYSQL_PASSWORD=password
+  #     - MYSQL_ROOT_PASSWORD=password
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # explorer:
+  #   image: hyperledger/explorer:latest
+  #   container_name: explorer
+  #   depends_on:
+  #     explorerdb:
+  #       condition: service_healthy
+  #     microfab:
+  #       condition: service_healthy
+  #   ports:
+  #     - "8090:8080"
+  #   environment:
+  #     - DATABASE_HOST=explorerdb
+  #     - DATABASE_USERNAME=hppoc
+  #     - DATABASE_PASSWD=password
+  #     - DISCOVERY_AS_LOCALHOST=false
+  #   volumes:
+  #     - ./explorer-config/connection.json:/opt/explorer/app/platform/fabric/connection-profile/first-network.json
+  #     - ./explorer-config/explorerconfig.json:/opt/explorer/app/explorerconfig.json
+  #     - ./microfab-data/admin-org1:/tmp/crypto

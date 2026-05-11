@@ -1,0 +1,32 @@
+{
+  "name": "microfab-network",
+  "version": "1.0.0",
+  "client": {
+    "organization": "Org1MSP",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        }
+      }
+    }
+  },
+  "organizations": {
+    "Org1MSP": {
+      "mspid": "Org1MSP",
+      "peers": ["peer1"]
+    }
+  },
+  "peers": {
+    "peer1": {
+      "url": "grpc://microfab:2004"
+    }
+  },
+  "channels": {
+    "channel1": {
+      "peers": {
+        "peer1": {}
+      }
+    }
+  }
+}

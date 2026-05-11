@@ -19,6 +19,14 @@
 //   ou getBagHistory.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// On force le polyfill immédiatement au niveau global de l'environnement Node
+global.Object.hasOwn = global.Object.hasOwn || function(obj, prop) {
+    return Object.prototype.hasOwnProperty.call(obj, prop);
+};
+
+// On vérifie que ça a marché en écrivant dans les logs de Microfab
+console.log("[CHAINCODE-FIX] Polyfill Object.hasOwn appliqué avec succès !");
+
 const { Contract } = require("fabric-contract-api");
 
 class CacaoEUDRContract extends Contract {

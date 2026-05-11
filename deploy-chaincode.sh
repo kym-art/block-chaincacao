@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-MICROFAB_URL="${MICROFAB_URL:-http://localhost:8080}"
+MICROFAB_URL="${MICROFAB_URL:-http://127.0.0.1:8080}"
 MICROFAB_CONTAINER="${MICROFAB_CONTAINER:-microfab}"
 
 CHANNEL="${CHANNEL:-channel1}"
@@ -30,8 +30,10 @@ MSP_CONFIG_PATH="${MSP_CONFIG_PATH:-/opt/microfab/data/admin-org1}"
 FABRIC_CFG_PATH_IN_CONTAINER="${FABRIC_CFG_PATH_IN_CONTAINER:-/opt/microfab/data/peer-org1/config}"
 
 # Ports internes Microfab (déduits des logs/config générés)
-ORDERER_ADDRESS="${ORDERER_ADDRESS:-localhost:2002}"
-PEER_ADDRESS="${PEER_ADDRESS:-localhost:2004}"
+#ORDERER_ADDRESS="${ORDERER_ADDRESS:-0.0.0.0:2002}"
+#PEER_ADDRESS="${PEER_ADDRESS:-0.0.0.0:2004}"
+ORDERER_ADDRESS="localhost:2002"
+PEER_ADDRESS="localhost:2004"
 
 PACKAGE_LABEL="${PACKAGE_LABEL:-${CHAINCODE_NAME}_${CHAINCODE_VERSION}}"
 PACKAGE_FILE_IN_CONTAINER="${PACKAGE_FILE_IN_CONTAINER:-/tmp/${CHAINCODE_NAME}.tar.gz}"
@@ -99,18 +101,20 @@ docker_peer lifecycle chaincode package "${PACKAGE_FILE_IN_CONTAINER}" \
 docker exec "${MICROFAB_CONTAINER}" ls -lh "${PACKAGE_FILE_IN_CONTAINER}" || true
 
 echo "[4/5] Installation + approbation..."
-docker_peer lifecycle chaincode install "${PACKAGE_FILE_IN_CONTAINER}"
+docker_peer lifecycle chaincode install "${PACKAGE_FILE_IN_CONTAINER}" || echo "      ! Le chaincode est peut-être déjà installé, on continue..."
 
 PACKAGE_ID="$(docker_peer lifecycle chaincode calculatepackageid "${PACKAGE_FILE_IN_CONTAINER}")"
 echo "      ✓ Package ID: ${PACKAGE_ID}"
 
+echo "      → Approbation pour l'organisation..."
 docker_peer lifecycle chaincode approveformyorg \
   -o "${ORDERER_ADDRESS}" \
   --channelID "${CHANNEL}" \
   --name "${CHAINCODE_NAME}" \
   --version "${CHAINCODE_VERSION}" \
   --package-id "${PACKAGE_ID}" \
-  --sequence "${CHAINCODE_SEQUENCE}"
+  --sequence "${CHAINCODE_SEQUENCE}" \
+  --connTimeout 30s || echo "      ! Déjà approuvé ou erreur d'ordre (on tente le commit)"
 
 echo "[5/5] Commit + vérification..."
 docker_peer lifecycle chaincode commit \
@@ -127,6 +131,6 @@ echo ""
 echo "══════════════════════════════════════════════"
 echo " ✓ Déploiement terminé"
 echo " Test rapide:"
-echo "   curl http://localhost:3000/health"
-echo "   curl -X POST http://localhost:3000/anchor -H 'X-API-Key: mariuskym' -H 'Content-Type: application/json' -d '{"lotCode":"LOT-TEST-001","event":{"action":"creation"},"prevEventHash":"genesis","geoPolygon":{"type":"Polygon","coordinates":[[[-2.5,5.5],[-2.5,6.0],[-2.0,6.0],[-2.0,5.5],[-2.5,5.5]]]}}'"
+echo "   curl http://127.0.0.1:3000/health"
+echo "   curl -X POST http://127.0.0.1:3000/anchor -H 'X-API-Key: mariuskym' -H 'Content-Type: application/json' -d '{"lotCode":"LOT-TEST-001","event":{"action":"creation"},"prevEventHash":"genesis","geoPolygon":{"type":"Polygon","coordinates":[[[-2.5,5.5],[-2.5,6.0],[-2.0,6.0],[-2.0,5.5],[-2.5,5.5]]]}}'"
 echo "══════════════════════════════════════════════"

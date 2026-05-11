@@ -1,0 +1,14 @@
+{
+  "syncType": "local",
+  "mysql": {
+    "host": "explorerdb",
+    "port": "3306",
+    "database": "fabricexplorer",
+    "username": "hppoc",
+    "passwd": "password"
+  },
+  "persistence": "mysql",
+  "platforms": ["fabric"],
+  "type": "fabric",
+  "license": "Apache-2.0"
+}
