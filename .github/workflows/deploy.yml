@@ -1,0 +1,27 @@
+name: Deploy on GCP
+
+on:
+  push:
+    branches: [ master ] # Se déclenche lors d'un push sur la branche main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/blockchaincacao
+            git fetch origin master
+            git reset --hard origin/master
+            cd api
+            npm install
+            docker compose up -d --build cacao-api
+            # pm2 reload hyperledger-api
