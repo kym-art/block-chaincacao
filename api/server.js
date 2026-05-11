@@ -8,11 +8,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const grpc = require("@grpc/grpc-js");
-const {
-  connect,
-  hash,
-  signers,
-} = require("@hyperledger/fabric-gateway");
+const { connect, hash, signers } = require("@hyperledger/fabric-gateway");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
@@ -20,12 +16,18 @@ const path = require("path");
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURATION (variables d'environnement injectées par Docker Compose)
 // ─────────────────────────────────────────────────────────────────────────────
-const MICROFAB_URL   = process.env.MICROFAB_URL   || "http://localhost:8080";
-const CHANNEL_NAME   = process.env.CHANNEL_NAME   || "cacao-channel";
+const MICROFAB_URL = process.env.MICROFAB_URL || "http://localhost:8080";
+const CHANNEL_NAME = process.env.CHANNEL_NAME || "channel1";
 const CHAINCODE_NAME = process.env.CHAINCODE_NAME || "cacao-contract";
-const MSP_ID         = process.env.MSP_ID         || "CacaoOrgMSP";
-const PORT           = parseInt(process.env.PORT  || "3000", 10);
-const API_KEY        = process.env.BLOCKCHAIN_API_KEY || null;
+const MSP_ID = process.env.MSP_ID || "Org1MSP";
+// Optionnel (recommandé en Docker Compose): endpoint gRPC direct du peer
+// Exemple: FABRIC_PEER_ENDPOINT=microfab:2004
+const FABRIC_PEER_ENDPOINT = process.env.FABRIC_PEER_ENDPOINT || null;
+// Optionnel: authority gRPC à forcer (utile si Microfab proxifie via :8080)
+// Exemple: FABRIC_GRPC_AUTHORITY=org1peer-api.127-0-0-1.nip.io
+const FABRIC_GRPC_AUTHORITY = process.env.FABRIC_GRPC_AUTHORITY || null;
+const PORT = parseInt(process.env.PORT || "3000", 10);
+const API_KEY = process.env.BLOCKCHAIN_API_KEY || null;
 
 // Répertoire temporaire pour les identités récupérées depuis Microfab
 const IDENTITY_DIR = "/tmp/cacao-fabric-identity";
@@ -112,7 +114,7 @@ function sortKeysDeep(value) {
  * @returns {string}   - SHA-256 hexadécimal (64 caractères)
  */
 function canonicalHash(obj) {
-  const sorted    = sortKeysDeep(obj);
+  const sorted = sortKeysDeep(obj);
   const canonical = JSON.stringify(sorted);
   return crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
 }
@@ -142,7 +144,7 @@ function resolvePrevEventHash(prevEventHash) {
   }
   if (!isValidSha256(prevEventHash)) {
     throw new Error(
-      "prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'."
+      "prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'.",
     );
   }
   return prevEventHash;
@@ -159,74 +161,125 @@ function resolvePrevEventHash(prevEventHash) {
  * Récupère les identités de l'organisation depuis l'API Microfab.
  * Écrit les fichiers cert.pem et key.pem dans IDENTITY_DIR.
  *
- * @returns {{ certPath: string, keyPath: string, peerEndpoint: string }}
+ * @returns {{ certPath: string, keyPath: string, peerEndpoint: string, peerGrpcOptions: object }}
  */
 async function fetchMicrofabIdentity() {
   fs.mkdirSync(IDENTITY_DIR, { recursive: true });
 
   // Récupération de la liste des identités disponibles dans Microfab
   const { data: identities } = await axios.get(
-    `${MICROFAB_URL}/config/identities`
+    `${MICROFAB_URL}/ak/api/v1/components`,
   );
 
-  // On cible l'admin de l'organisation CacaoOrg
+  // On cible l'admin de l'organisation (Org1 par défaut Microfab)
   const adminIdentity = identities.find(
     (id) =>
       id.msp_id === MSP_ID &&
-      id.type === "admin"
+      id.type === "identity" &&
+      id.id === "org1admin",
   );
 
   if (!adminIdentity) {
     throw new Error(
       `Identité admin introuvable pour MSP_ID=${MSP_ID}. ` +
-        "Vérifiez la configuration Microfab."
+        "Vérifiez la configuration Microfab.",
     );
   }
 
   // Décodage Base64 des PEM
   const certPem = Buffer.from(adminIdentity.cert, "base64").toString("utf8");
-  const keyPem  = Buffer.from(adminIdentity.private_key, "base64").toString("utf8");
+  const keyPem = Buffer.from(adminIdentity.private_key, "base64").toString(
+    "utf8",
+  );
 
   const certPath = path.join(IDENTITY_DIR, "cert.pem");
-  const keyPath  = path.join(IDENTITY_DIR, "key.pem");
+  const keyPath = path.join(IDENTITY_DIR, "key.pem");
 
   fs.writeFileSync(certPath, certPem, { mode: 0o600 });
-  fs.writeFileSync(keyPath, keyPem,   { mode: 0o600 });
+  fs.writeFileSync(keyPath, keyPem, { mode: 0o600 });
 
   // Récupération de l'endpoint gRPC du peer
   const { data: components } = await axios.get(
-    `${MICROFAB_URL}/config/components`
+    `${MICROFAB_URL}/ak/api/v1/components`,
   );
 
   const peer = components.find(
-    (c) => c.type === "fabric-peer" && c.msp_id === MSP_ID
+    (c) => c.type === "fabric-peer" && c.msp_id === MSP_ID,
   );
 
   if (!peer) {
     throw new Error(`Peer introuvable pour MSP_ID=${MSP_ID}.`);
   }
 
-  // Extraction du host:port depuis l'URL gRPC exposée par Microfab.
-  // IMPORTANT — piège Docker : Microfab retourne "grpc://localhost:xxxx"
-  // mais "localhost" depuis le container cacao-api désigne lui-même, pas Microfab.
-  // On substitue donc "localhost" par le nom DNS du service Docker ("microfab").
-  const microfabHost = new URL(MICROFAB_URL).hostname; // "microfab" en Docker Compose
-  const peerEndpoint = peer.api_url
-    .replace(/^grpc?s?:\/\//, "")         // retire le scheme grpc://
-    .replace(/^localhost/, microfabHost);  // remplace localhost → microfab
+  // Microfab expose souvent le Gateway via un reverse-proxy sur le même port
+  // que la console (8080) et utilise le routage basé sur l'authority.
+  // Le JSON `api_options` contient les channel options gRPC à appliquer.
+  const peerApiOptions = peer.api_options || {};
+  const peerGrpcOptions = {};
+  if (peerApiOptions["grpc.default_authority"]) {
+    peerGrpcOptions["grpc.default_authority"] =
+      peerApiOptions["grpc.default_authority"];
+  }
+  if (peerApiOptions["grpc.ssl_target_name_override"]) {
+    peerGrpcOptions["grpc.ssl_target_name_override"] =
+      peerApiOptions["grpc.ssl_target_name_override"];
+  }
 
-  console.log(`[Fabric] Peer endpoint: ${peerEndpoint}`);
+  // Extraction du host:port depuis l'URL gRPC exposée par Microfab.
+  // IMPORTANT — piège Docker : l'URL retournée peut contenir un hostname
+  // "localhost" ou un nom DNS nip.io. Dans un container, ces hostnames
+  // peuvent pointer vers le mauvais endroit. On force donc l'hôte à celui
+  // de MICROFAB_URL (microfab en Docker Compose, localhost sur la machine).
+  const microfabUrl = new URL(MICROFAB_URL);
+  const microfabHost = microfabUrl.hostname;
+
+  if (!peer.api_url || typeof peer.api_url !== "string") {
+    throw new Error(
+      "Microfab n'a pas fourni peer.api_url (URL gRPC). Vérifiez /ak/api/v1/components.",
+    );
+  }
+
+  const peerUrl = new URL(peer.api_url);
+  const peerPort = peerUrl.port || "8080";
+  const peerEndpoint = (FABRIC_PEER_ENDPOINT || `${microfabHost}:${peerPort}`).replace(
+    /^grpc?s?:\/\//,
+    "",
+  );
+
+  // Fallback important : si on dial vers microfab:8080 (proxy) depuis Docker,
+  // l'authority attendue par Microfab peut être un hostname nip.io. Si Microfab
+  // ne fournit pas api_options, on tente de la déduire du hostname de peer.api_url.
+  if (
+    !peerGrpcOptions["grpc.default_authority"] &&
+    !FABRIC_GRPC_AUTHORITY &&
+    peerUrl.hostname &&
+    peerUrl.hostname !== "localhost" &&
+    peerUrl.hostname !== microfabHost
+  ) {
+    peerGrpcOptions["grpc.default_authority"] = peerUrl.hostname;
+  }
+
+  if (FABRIC_GRPC_AUTHORITY) {
+    peerGrpcOptions["grpc.default_authority"] = FABRIC_GRPC_AUTHORITY;
+  }
+
+  console.log(`[Fabric] Peer endpoint (dial): ${peerEndpoint}`);
+  if (peerGrpcOptions["grpc.default_authority"]) {
+    console.log(
+      `[Fabric] grpc.default_authority: ${peerGrpcOptions["grpc.default_authority"]}`,
+    );
+  }
   console.log(`[Fabric] Identité admin chargée pour: ${MSP_ID}`);
 
-  return { certPath, keyPath, peerEndpoint };
+  return { certPath, keyPath, peerEndpoint, peerGrpcOptions };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 3 : INITIALISATION DU GATEWAY FABRIC
 // ─────────────────────────────────────────────────────────────────────────────
 
-let fabricGateway  = null; // Connexion Gateway (singleton)
-let fabricNetwork  = null; // Référence au canal
+let fabricGateway = null; // Connexion Gateway (singleton)
+let fabricNetwork = null; // Référence au canal
 let fabricContract = null; // Référence au smart contract
 
 /**
@@ -234,23 +287,28 @@ let fabricContract = null; // Référence au smart contract
  * Appelé une seule fois au démarrage de l'API.
  */
 async function initFabricGateway() {
-  const { certPath, keyPath, peerEndpoint } = await fetchMicrofabIdentity();
+  const { certPath, keyPath, peerEndpoint, peerGrpcOptions } =
+    await fetchMicrofabIdentity();
 
   const certPem = fs.readFileSync(certPath);
-  const keyPem  = fs.readFileSync(keyPath);
+  const keyPem = fs.readFileSync(keyPath);
 
   // Création du client gRPC (sans TLS — Microfab en mode développement)
-  const grpcClient = new grpc.Client(peerEndpoint, grpc.credentials.createInsecure());
+  const grpcClient = new grpc.Client(
+    peerEndpoint,
+    grpc.credentials.createInsecure(),
+    peerGrpcOptions,
+  );
 
   // Identity : certificat X.509 de l'admin
   const identity = {
-    mspId:       MSP_ID,
+    mspId: MSP_ID,
     credentials: certPem,
   };
 
   // Signer : clé privée ECDSA (P-256) de l'admin
   const privateKey = crypto.createPrivateKey(keyPem);
-  const signer     = signers.newPrivateKeySigner(privateKey);
+  const signer = signers.newPrivateKeySigner(privateKey);
 
   // Connexion au Gateway Fabric
   fabricGateway = connect({
@@ -261,12 +319,14 @@ async function initFabricGateway() {
     hash: hash.sha256,
   });
 
-  fabricNetwork  = fabricGateway.getNetwork(CHANNEL_NAME);
-  fabricContract = fabricNetwork.getContract(CHAINCODE_NAME);
+  fabricNetwork = fabricGateway.getNetwork(CHANNEL_NAME);
+  fabricContract = fabricNetwork.getContract(
+    CHAINCODE_NAME
+  );
 
   console.log(
     `[Fabric] Gateway connecté — canal: ${CHANNEL_NAME}, ` +
-    `chaincode: ${CHAINCODE_NAME}`
+      `chaincode: ${CHAINCODE_NAME}`,
   );
 }
 
@@ -307,10 +367,10 @@ app.post("/anchor", async (req, res) => {
 
     // ── Validation des entrées ─────────────────────────────────────────────
     const missing = [];
-    if (!lotCode)        missing.push("lotCode");
-    if (!event)          missing.push("event");
-    if (!prevEventHash)  missing.push("prevEventHash");
-    if (!geoPolygon)     missing.push("geoPolygon");
+    if (!lotCode) missing.push("lotCode");
+    if (!event) missing.push("event");
+    if (!prevEventHash) missing.push("prevEventHash");
+    if (!geoPolygon) missing.push("geoPolygon");
     if (missing.length > 0) {
       return res.status(400).json({
         error: `Champs manquants: ${missing.join(", ")}`,
@@ -320,8 +380,7 @@ app.post("/anchor", async (req, res) => {
     // Validation EUDR : le polygone doit être un GeoJSON Polygon ou MultiPolygon
     if (!["Polygon", "MultiPolygon"].includes(geoPolygon.type)) {
       return res.status(400).json({
-        error:
-          "geoPolygon.type doit être 'Polygon' ou 'MultiPolygon' (EUDR).",
+        error: "geoPolygon.type doit être 'Polygon' ou 'MultiPolygon' (EUDR).",
       });
     }
 
@@ -350,12 +409,12 @@ app.post("/anchor", async (req, res) => {
 
     // ── Soumission de la transaction Fabric ───────────────────────────────
     const resultBytes = await fabricContract.submitTransaction(
-      "anchorEvent",          // Nom de la fonction du chaincode
+      "anchorEvent", // Nom de la fonction du chaincode
       lotCodeHash,
       bagIdHash,
       eventHash,
       resolvedPrevEventHash,
-      geoHash
+      geoHash,
     );
 
     const result = JSON.parse(Buffer.from(resultBytes).toString("utf8"));
@@ -407,9 +466,9 @@ app.post("/anchor/bag", async (req, res) => {
 
     // ── Validation des entrées ─────────────────────────────────────────────
     const missing = [];
-    if (!lotCode)       missing.push("lotCode");
-    if (!bagId)         missing.push("bagId");
-    if (!event)         missing.push("event");
+    if (!lotCode) missing.push("lotCode");
+    if (!bagId) missing.push("bagId");
+    if (!event) missing.push("event");
     if (!prevEventHash) missing.push("prevEventHash");
     if (missing.length > 0) {
       return res.status(400).json({
@@ -460,7 +519,10 @@ app.post("/anchor/bag", async (req, res) => {
       }
 
       // Vérification basique des coordonnées
-      if (!Array.isArray(geoPolygon.coordinates) || geoPolygon.coordinates.length === 0) {
+      if (
+        !Array.isArray(geoPolygon.coordinates) ||
+        geoPolygon.coordinates.length === 0
+      ) {
         return res.status(400).json({
           error:
             "EUDR: geoPolygon.coordinates doit être un tableau non vide " +
@@ -481,7 +543,7 @@ app.post("/anchor/bag", async (req, res) => {
         const historyBytes = await fabricContract.evaluateTransaction(
           "getBagHistory",
           lotCodeHash,
-          bagIdHash
+          bagIdHash,
         );
         const history = JSON.parse(Buffer.from(historyBytes).toString("utf8"));
         if (history.length > 0) {
@@ -512,7 +574,7 @@ app.post("/anchor/bag", async (req, res) => {
       bagIdHash,
       eventHash,
       resolvedPrevEventHash,
-      geoHash
+      geoHash,
     );
 
     const result = JSON.parse(Buffer.from(resultBytes).toString("utf8"));
@@ -573,7 +635,7 @@ app.get("/verify/:lotCodeHash", async (req, res) => {
     // Appel en lecture seule (evaluateTransaction = pas de consensus requis)
     const resultBytes = await fabricContract.evaluateTransaction(
       "getHistory",
-      lotCodeHash
+      lotCodeHash,
     );
 
     const history = JSON.parse(Buffer.from(resultBytes).toString("utf8"));
@@ -629,7 +691,7 @@ app.get("/verify/bag/:lotCodeHash/:bagIdHash", async (req, res) => {
     const resultBytes = await fabricContract.evaluateTransaction(
       "getBagHistory",
       lotCodeHash,
-      bagIdHash
+      bagIdHash,
     );
 
     const history = JSON.parse(Buffer.from(resultBytes).toString("utf8"));
@@ -711,7 +773,7 @@ async function main() {
       }
       const delay = Math.min(attempt * 5000, 30000); // 5s, 10s, 15s, 20s, 25s
       console.error(
-        `[API] Tentative ${attempt}/${MAX_RETRIES} échouée: ${err.message}`
+        `[API] Tentative ${attempt}/${MAX_RETRIES} échouée: ${err.message}`,
       );
       console.error(`[API] Nouvel essai dans ${delay / 1000}s...`);
       await new Promise((r) => setTimeout(r, delay));
@@ -721,10 +783,18 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`[API] Serveur démarré sur http://0.0.0.0:${PORT}`);
     console.log(`[API] Endpoints disponibles:`);
-    console.log(`        POST  /anchor                — Ancrage on-chain (lot)`);
-    console.log(`        POST  /anchor/bag            — Ancrage granulaire (sac)`);
-    console.log(`        GET   /verify/:lotCodeHash   — Vérification EUDR (lot)`);
-    console.log(`        GET   /verify/bag/:lotCodeHash/:bagIdHash — Vérification (sac)`);
+    console.log(
+      `        POST  /anchor                — Ancrage on-chain (lot)`,
+    );
+    console.log(
+      `        POST  /anchor/bag            — Ancrage granulaire (sac)`,
+    );
+    console.log(
+      `        GET   /verify/:lotCodeHash   — Vérification EUDR (lot)`,
+    );
+    console.log(
+      `        GET   /verify/bag/:lotCodeHash/:bagIdHash — Vérification (sac)`,
+    );
     console.log(`        POST  /hash/canonical        — Hash utilitaire`);
     console.log(`        GET   /health                — Statut`);
     console.log(`[API] Authentification: X-API-Key requis (sauf /health)`);

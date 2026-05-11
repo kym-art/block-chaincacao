@@ -16,14 +16,14 @@ API Express faisant office de **passerelle sécurisée** entre l'application Lar
 
 ## Table des routes
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| `POST` | `/anchor` | Ancrage on-chain d'un événement (niveau lot) |
-| `POST` | `/anchor/bag` | Ancrage granulaire par sac individuel |
-| `GET` | `/verify/:lotCodeHash` | Vérification de l'historique d'un lot |
-| `GET` | `/verify/bag/:lotCodeHash/:bagIdHash` | Vérification de l'historique d'un sac |
-| `POST` | `/hash/canonical` | Utilitaire de calcul de hash canonique |
-| `GET` | `/health` | Statut de l'API et de la connexion Fabric |
+| Méthode | Route                                 | Description                                  |
+| ------- | ------------------------------------- | -------------------------------------------- |
+| `POST`  | `/anchor`                             | Ancrage on-chain d'un événement (niveau lot) |
+| `POST`  | `/anchor/bag`                         | Ancrage granulaire par sac individuel        |
+| `GET`   | `/verify/:lotCodeHash`                | Vérification de l'historique d'un lot        |
+| `GET`   | `/verify/bag/:lotCodeHash/:bagIdHash` | Vérification de l'historique d'un sac        |
+| `POST`  | `/hash/canonical`                     | Utilitaire de calcul de hash canonique       |
+| `GET`   | `/health`                             | Statut de l'API et de la connexion Fabric    |
 
 ---
 
@@ -39,11 +39,11 @@ La clé est configurée via la variable d'environnement `BLOCKCHAIN_API_KEY` dan
 
 ### Codes d'erreur d'authentification
 
-| Code | Message | Cause |
-|------|---------|-------|
-| `500` | `BLOCKCHAIN_API_KEY non configurée.` | Variable d'env manquante |
-| `401` | `Authentification requise. Envoyez le header X-API-Key.` | Header absent |
-| `403` | `Clé API invalide.` | Clé fournie ≠ clé configurée |
+| Code  | Message                                                  | Cause                        |
+| ----- | -------------------------------------------------------- | ---------------------------- |
+| `500` | `BLOCKCHAIN_API_KEY non configurée.`                     | Variable d'env manquante     |
+| `401` | `Authentification requise. Envoyez le header X-API-Key.` | Header absent                |
+| `403` | `Clé API invalide.`                                      | Clé fournie ≠ clé configurée |
 
 ---
 
@@ -84,19 +84,27 @@ Ancrage on-chain d'un événement au **niveau lot** (compatibilité ascendante).
   "prevEventHash": "genesis",
   "geoPolygon": {
     "type": "Polygon",
-    "coordinates": [[[ -3.5, 4.2 ], [ -3.4, 4.2 ], [ -3.4, 4.3 ], [ -3.5, 4.3 ], [ -3.5, 4.2 ]]]
+    "coordinates": [
+      [
+        [-3.5, 4.2],
+        [-3.4, 4.2],
+        [-3.4, 4.3],
+        [-3.5, 4.3],
+        [-3.5, 4.2]
+      ]
+    ]
   }
 }
 ```
 
 ### Champs obligatoires
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `lotCode` | `string` | Identifiant métier du lot (sera haché canoniquement) |
-| `event` | `object` | Données métier de l'événement (sera haché canoniquement) |
+| Champ           | Type     | Description                                                      |
+| --------------- | -------- | ---------------------------------------------------------------- |
+| `lotCode`       | `string` | Identifiant métier du lot (sera haché canoniquement)             |
+| `event`         | `object` | Données métier de l'événement (sera haché canoniquement)         |
 | `prevEventHash` | `string` | SHA-256 de l'événement précédent, ou `"genesis"` pour le premier |
-| `geoPolygon` | `object` | **GeoJSON** Polygon/MultiPolygon de la parcelle (EUDR) |
+| `geoPolygon`    | `object` | **GeoJSON** Polygon/MultiPolygon de la parcelle (EUDR)           |
 
 ### Réponse succès (HTTP 201)
 
@@ -126,12 +134,12 @@ Ancrage on-chain d'un événement au **niveau lot** (compatibilité ascendante).
 
 ### Erreurs possibles
 
-| Code | Message | Cause |
-|------|---------|-------|
-| `400` | `Champs manquants: lotCode, event, ...` | Champ(s) obligatoire(s) absent(s) |
-| `400` | `geoPolygon.type doit être 'Polygon' ou 'MultiPolygon'` | Type GeoJSON invalide |
-| `400` | `prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'.` | Format SHA-256 invalide |
-| `500` | *(message d'erreur chaincode)* | Erreur Fabric ou autre |
+| Code  | Message                                                            | Cause                             |
+| ----- | ------------------------------------------------------------------ | --------------------------------- |
+| `400` | `Champs manquants: lotCode, event, ...`                            | Champ(s) obligatoire(s) absent(s) |
+| `400` | `geoPolygon.type doit être 'Polygon' ou 'MultiPolygon'`            | Type GeoJSON invalide             |
+| `400` | `prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'.` | Format SHA-256 invalide           |
+| `500` | _(message d'erreur chaincode)_                                     | Erreur Fabric ou autre            |
 
 ---
 
@@ -154,18 +162,26 @@ Ancrage on-chain d'un événement au **niveau lot** (compatibilité ascendante).
   "prevEventHash": "genesis",
   "geoPolygon": {
     "type": "Polygon",
-    "coordinates": [[[ -3.5, 4.2 ], [ -3.4, 4.2 ], [ -3.4, 4.3 ], [ -3.5, 4.3 ], [ -3.5, 4.2 ]]]
+    "coordinates": [
+      [
+        [-3.5, 4.2],
+        [-3.4, 4.2],
+        [-3.4, 4.3],
+        [-3.5, 4.3],
+        [-3.5, 4.2]
+      ]
+    ]
   }
 }
 ```
 
 ### Champs obligatoires
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `lotCode` | `string` | Identifiant métier du lot (sera haché canoniquement) |
-| `bagId` | `string` | Identifiant unique du sac (sera haché canoniquement) |
-| `event` | `object` | Données métier de l'événement (sera haché canoniquement) |
+| Champ           | Type     | Description                                                      |
+| --------------- | -------- | ---------------------------------------------------------------- |
+| `lotCode`       | `string` | Identifiant métier du lot (sera haché canoniquement)             |
+| `bagId`         | `string` | Identifiant unique du sac (sera haché canoniquement)             |
+| `event`         | `object` | Données métier de l'événement (sera haché canoniquement)         |
 | `prevEventHash` | `string` | SHA-256 de l'événement précédent, ou `"genesis"` pour le premier |
 
 ### Validation EUDR stricte
@@ -182,9 +198,11 @@ Ancrage on-chain d'un événement au **niveau lot** (compatibilité ascendante).
 ### Hachage du bagId
 
 Le `bagId` est passé dans un objet `{ bagId: "BAG-001-ABC123" }` puis haché canoniquement :
+
 ```javascript
 bagIdHash = canonicalHash({ bagId: "BAG-001-ABC123" });
 ```
+
 Ce mécanisme garantit que le hash est **reproductible** côté Laravel (tri des clés identique).
 
 ### Réponse succès (HTTP 201)
@@ -213,15 +231,15 @@ Ce mécanisme garantit que le hash est **reproductible** côté Laravel (tri des
 
 ### Erreurs possibles
 
-| Code | Message | Cause |
-|------|---------|-------|
-| `400` | `Champs manquants: bagId, ...` | Champ obligatoire absent |
-| `400` | `prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'.` | Format invalide |
+| Code  | Message                                                                | Cause                         |
+| ----- | ---------------------------------------------------------------------- | ----------------------------- |
+| `400` | `Champs manquants: bagId, ...`                                         | Champ obligatoire absent      |
+| `400` | `prevEventHash doit être un SHA-256 valide (64 hex) ou 'genesis'.`     | Format invalide               |
 | `400` | `EUDR: geoPolygon est obligatoire lors du premier ancrage d'un sac...` | Premier ancrage sans polygone |
-| `400` | `geoPolygon.type doit être 'Polygon' ou 'MultiPolygon' (EUDR).` | Type GeoJSON invalide |
-| `400` | `EUDR: geoPolygon.coordinates doit être un tableau non vide...` | Coordonnées manquantes |
-| `400` | `anchorEvent: 'bagIdHash' n'est pas un SHA-256 valide (64 hex).` | Erreur hash côté chaincode |
-| `500` | *(message d'erreur)* | Erreur interne |
+| `400` | `geoPolygon.type doit être 'Polygon' ou 'MultiPolygon' (EUDR).`        | Type GeoJSON invalide         |
+| `400` | `EUDR: geoPolygon.coordinates doit être un tableau non vide...`        | Coordonnées manquantes        |
+| `400` | `anchorEvent: 'bagIdHash' n'est pas un SHA-256 valide (64 hex).`       | Erreur hash côté chaincode    |
+| `500` | _(message d'erreur)_                                                   | Erreur interne                |
 
 ---
 
@@ -231,8 +249,8 @@ Récupère la **timeline complète** de tous les événements (tous sacs confond
 
 ### Paramètre URL
 
-| Paramètre | Type | Description |
-|-----------|------|-------------|
+| Paramètre     | Type     | Description                  |
+| ------------- | -------- | ---------------------------- |
 | `lotCodeHash` | `string` | SHA-256 (64 hex) du code-lot |
 
 ### Exemple
@@ -271,10 +289,10 @@ GET /verify/a1b2c3d4e5f6...
 
 ### Erreurs possibles
 
-| Code | Message | Cause |
-|------|---------|-------|
-| `400` | `lotCodeHash invalide — doit être un SHA-256 (64 hex).` | Format invalide |
-| `404` | `getHistory: aucun enregistrement trouvé pour lotCodeHash=...` | Lot inconnu |
+| Code  | Message                                                        | Cause           |
+| ----- | -------------------------------------------------------------- | --------------- |
+| `400` | `lotCodeHash invalide — doit être un SHA-256 (64 hex).`        | Format invalide |
+| `404` | `getHistory: aucun enregistrement trouvé pour lotCodeHash=...` | Lot inconnu     |
 
 ---
 
@@ -284,10 +302,10 @@ GET /verify/a1b2c3d4e5f6...
 
 ### Paramètres URL
 
-| Paramètre | Type | Description |
-|-----------|------|-------------|
+| Paramètre     | Type     | Description                  |
+| ------------- | -------- | ---------------------------- |
 | `lotCodeHash` | `string` | SHA-256 (64 hex) du code-lot |
-| `bagIdHash` | `string` | SHA-256 (64 hex) du bag_id |
+| `bagIdHash`   | `string` | SHA-256 (64 hex) du bag_id   |
 
 ### Exemple
 
@@ -325,11 +343,11 @@ GET /verify/a1b2c3d4e5f6.../bag-xyz-987...
 
 ### Erreurs possibles
 
-| Code | Message | Cause |
-|------|---------|-------|
+| Code  | Message                                                 | Cause                       |
+| ----- | ------------------------------------------------------- | --------------------------- |
 | `400` | `lotCodeHash invalide — doit être un SHA-256 (64 hex).` | Format lotCodeHash invalide |
-| `400` | `bagIdHash invalide — doit être un SHA-256 (64 hex).` | Format bagIdHash invalide |
-| `404` | *(message chaincode)* | Sac inconnu |
+| `400` | `bagIdHash invalide — doit être un SHA-256 (64 hex).`   | Format bagIdHash invalide   |
+| `404` | _(message chaincode)_                                   | Sac inconnu                 |
 
 ---
 
@@ -363,7 +381,7 @@ N'importe quel objet JSON :
 const lotCodeHash = await axios.post(
   `${API_URL}/hash/canonical`,
   { lotCode: "LOT-2024-001" },
-  { headers: { "X-API-Key": API_KEY } }
+  { headers: { "X-API-Key": API_KEY } },
 );
 // lotCodeHash = "a1b2c3d4e5f6..."
 ```
@@ -380,7 +398,7 @@ Endpoint public (sans authentification) pour les healthchecks Docker.
 {
   "status": "ok",
   "fabric": "connected",
-  "channel": "cacao-channel",
+  "channel": "channel1",
   "chaincode": "cacao-contract",
   "timestamp": "2024-03-15T10:30:00.000Z"
 }
@@ -403,6 +421,7 @@ a1b2c3d4e5f6...__bag-xyz-987...__1710493800000
 - `timestampMs` : timestamp Unix en millisecondes (certifié par le réseau Fabric)
 
 Cette structure garantit :
+
 - L'**immuabilité** : chaque scan génère une nouvelle clé unique
 - La **rétrocompatibilité** : `getHistory(lotCodeHash)` retrouve toutes les entrées via le préfixe
 - La **traçabilité granulaire** : `getBagHistory(lotCodeHash, bagIdHash)` retrouve les entrées d'un sac via le préfixe `lotCodeHash__bagIdHash__`
@@ -488,6 +507,7 @@ X-API-Key: sk-xxxxx
 ### 3. Stockage côté Laravel
 
 Pour chaque transaction réussie, stocker en base :
+
 - `lotCodeHash` (calculable côté Laravel via `/hash/canonical`)
 - `bagIdHash` (calculable côté Laravel via `/hash/canonical`)
 - `txId` (identifiant de la transaction Fabric)
@@ -497,28 +517,30 @@ Pour chaque transaction réussie, stocker en base :
 
 ## Codes d'erreur globaux
 
-| Code HTTP | Signification |
-|-----------|---------------|
-| `200` | Succès (GET) |
-| `201` | Succès (POST) |
-| `400` | Erreur de validation (champ manquant, format invalide, contrainte EUDR) |
-| `401` | Header `X-API-Key` absent |
-| `403` | Clé API invalide |
-| `404` | Ressource non trouvée (lot ou sac inconnu) |
-| `500` | Erreur interne serveur ou Fabric |
+| Code HTTP | Signification                                                           |
+| --------- | ----------------------------------------------------------------------- |
+| `200`     | Succès (GET)                                                            |
+| `201`     | Succès (POST)                                                           |
+| `400`     | Erreur de validation (champ manquant, format invalide, contrainte EUDR) |
+| `401`     | Header `X-API-Key` absent                                               |
+| `403`     | Clé API invalide                                                        |
+| `404`     | Ressource non trouvée (lot ou sac inconnu)                              |
+| `500`     | Erreur interne serveur ou Fabric                                        |
 
 ---
 
 ## Configuration (variables d'environnement)
 
-| Variable | Valeur par défaut | Description |
-|----------|-------------------|-------------|
-| `MICROFAB_URL` | `http://localhost:8080` | URL de l'API Microfab |
-| `CHANNEL_NAME` | `cacao-channel` | Canal Fabric |
-| `CHAINCODE_NAME` | `cacao-contract` | Nom du smart contract |
-| `MSP_ID` | `CacaoOrgMSP` | Identifiant de l'organisation Fabric |
-| `PORT` | `3000` | Port d'écoute HTTP |
-| `BLOCKCHAIN_API_KEY` | `null` | Clé API (requise) |
+| Variable                | Valeur par défaut       | Description                                                           |
+| ----------------------- | ----------------------- | --------------------------------------------------------------------- |
+| `MICROFAB_URL`          | `http://localhost:8080` | URL de l'API Microfab                                                 |
+| `CHANNEL_NAME`          | `channel1`              | Canal Fabric                                                          |
+| `CHAINCODE_NAME`        | `cacao-contract`        | Nom du smart contract                                                 |
+| `MSP_ID`                | `Org1MSP`               | Identifiant de l'organisation Fabric                                  |
+| `FABRIC_PEER_ENDPOINT`  | `null`                  | Override endpoint gRPC du peer (ex: `microfab:2004` en Docker)        |
+| `FABRIC_GRPC_AUTHORITY` | `null`                  | Override `grpc.default_authority` (utile si proxy Microfab via :8080) |
+| `PORT`                  | `3000`                  | Port d'écoute HTTP                                                    |
+| `BLOCKCHAIN_API_KEY`    | `null`                  | Clé API (requise)                                                     |
 
 ---
 
@@ -580,15 +602,16 @@ Les fichiers sont prêts pour le déploiement via le `docker-compose.yml` exista
 ```yaml
 # docker-compose.yml (extrait pertinent)
 services:
-  api:
+  cacao-api:
     build: ./api
     ports:
       - "3000:3000"
     environment:
       - MICROFAB_URL=http://microfab:8080
-      - CHANNEL_NAME=cacao-channel
+      - CHANNEL_NAME=channel1
       - CHAINCODE_NAME=cacao-contract
-      - MSP_ID=CacaoOrgMSP
+      - MSP_ID=Org1MSP
+      - FABRIC_PEER_ENDPOINT=microfab:2004
       - BLOCKCHAIN_API_KEY=${BLOCKCHAIN_API_KEY}
     depends_on:
       - microfab

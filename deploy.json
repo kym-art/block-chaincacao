@@ -1,0 +1,14 @@
+{
+  "endorsing_organizations": [{
+    "name": "CacaoOrg",
+    "msp_id": "CacaoOrgMSP",
+    "peers": [{"name": "CacaoOrgPeer"}],
+    "certificate_authorities": [{"name": "CacaoOrgCA"}],
+    "admin_identities": [{"name": "cacaoorgadmin"}]
+  }],
+  "channels": [{
+    "name": "cacao-channel",
+    "endorsing_organizations": ["CacaoOrg"]
+  }],
+  "capability_level": "V2_0"
+}

@@ -1,4 +1,4 @@
-"use strict";
+ "use strict";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SMART CONTRACT — Traçabilité Cacao / Conformité EUDR
@@ -222,6 +222,12 @@ class CacaoEUDRContract extends Contract {
       };
 
       history.push(entry);
+    }
+
+    if (history.length === 0) {
+      throw new Error(
+        `getBagHistory: aucun enregistrement trouvé pour lotCodeHash=${lotCodeHash}, bagIdHash=${bagIdHash}`
+      );
     }
 
     return JSON.stringify(history);

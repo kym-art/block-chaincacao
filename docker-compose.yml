@@ -1,41 +1,18 @@
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Microfab : nœud Hyperledger Fabric tout-en-un (peer + orderer + CA + gateway)
-# Image officielle IBM — zéro réseau externe, zéro TLS à configurer.
-# ─────────────────────────────────────────────────────────────────────────────
 services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Microfab : nœud Hyperledger Fabric tout-en-un
+  # Utilisation des valeurs par défaut (Org1, channel1)
+  # ─────────────────────────────────────────────────────────────────────────────
   microfab:
     image: ibmcom/ibp-microfab:latest
     container_name: microfab
     restart: unless-stopped
-
     ports:
-      # Port principal : API de gestion Microfab (enroll, deploy chaincode, etc.)
       - "8080:8080"
-
-    environment:
-      # Configuration minimaliste d'un seul canal "cacao-channel"
-      # avec une seule organisation "CacaoOrg"
-      MICROFAB_CONFIG: >
-        {
-          "endorsing_organizations": [
-            {
-              "name": "CacaoOrg"
-            }
-          ],
-          "channels": [
-            {
-              "name": "cacao-channel",
-              "endorsing_organizations": ["CacaoOrg"]
-            }
-          ],
-          "capability_level": "V2_0"
-        }
-
     volumes:
-      # Persistance des données du ledger entre redémarrages
-      - microfab_data:/var/hyperledger/production
-
+      - ./microfab-data:/opt/microfab/data
+      - ./chaincode:/opt/microfab/chaincode
+      - ./infra/docker_patches/index.cjs.js:/opt/microfab/chaincode/node_modules/@so-ric/colorspace/dist/index.cjs.js
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/ak/api/v1/health"]
       interval: 10s
@@ -44,8 +21,8 @@ services:
       start_period: 30s
 
   # ───────────────────────────────────────────────────────────────────────────
-  # API Node.js : pont entre Laravel (off-chain) et Fabric (on-chain)
-  # Démarre uniquement après que Microfab est healthy.
+  # API Node.js : pont entre Laravel et Fabric
+  # Adaptée à la config par défaut de Microfab (Org1 / channel1)
   # ───────────────────────────────────────────────────────────────────────────
   cacao-api:
     build:
@@ -59,16 +36,12 @@ services:
     ports:
       - "3000:3000"
     environment:
-      MICROFAB_URL: "http://microfab:8080"
-      CHANNEL_NAME: "cacao-channel"
-      CHAINCODE_NAME: "cacao-contract"
-      MSP_ID: "CacaoOrgMSP"
-      PORT: "3000"
-      # Clé API partagée avec Laravel — changer cette valeur en production
-      BLOCKCHAIN_API_KEY: "changeme-eudr-api-key-2024"
+      - MICROFAB_URL=http://microfab:8080
+      - CHANNEL_NAME=channel1
+      - CHAINCODE_NAME=cacao-contract
+      - MSP_ID=Org1MSP
+      - FABRIC_PEER_ENDPOINT=microfab:2004
+      - PORT=3000
+      - BLOCKCHAIN_API_KEY=mariuskym
     volumes:
-      # Montage du dossier chaincode pour le déploiement automatique au boot
       - ./chaincode:/app/chaincode:ro
-
-volumes:
-  microfab_data:

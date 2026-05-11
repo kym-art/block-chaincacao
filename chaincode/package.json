@@ -4,13 +4,13 @@
   "description": "Smart contract EUDR — ancrage d'immuabilité pour la traçabilité cacao",
   "main": "contract.js",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^16.4.0"
   },
   "scripts": {
-    "start": "node contract.js"
+    "start": "fabric-chaincode-node start"
   },
   "dependencies": {
-    "fabric-contract-api": "^2.5.0",
-    "fabric-shim": "^2.5.0"
+    "fabric-contract-api": "2.4.2",
+    "fabric-shim": "2.4.2"
   }
 }
